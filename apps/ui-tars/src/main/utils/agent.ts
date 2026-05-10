@@ -34,6 +34,7 @@ export const getModelVersion = (
       return UITarsModelVersion.DOUBAO_1_5_20B;
     case VLMProviderV2.minimax:
     case VLMProviderV2.copilot:
+    case VLMProviderV2.mlx:
       return UITarsModelVersion.V1_0;
     default:
       return UITarsModelVersion.V1_0;

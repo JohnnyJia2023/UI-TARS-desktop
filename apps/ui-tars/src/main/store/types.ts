@@ -48,6 +48,7 @@ export enum VLMProviderV2 {
   doubao_1_5_vl = 'VolcEngine Ark for Doubao-1.5-thinking-vision-pro',
   minimax = 'MiniMax',
   copilot = 'GitHub Copilot',
+  mlx = 'MLX Local',
 }
 
 export enum SearchEngineForSettings {

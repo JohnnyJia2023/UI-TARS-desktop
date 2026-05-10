@@ -120,26 +120,27 @@ export class UITarsModel extends Model {
       apiKey,
     });
 
+    const isDoubaoModel =
+      uiTarsVersion === UITarsModelVersion.DOUBAO_1_5_15B ||
+      uiTarsVersion === UITarsModelVersion.DOUBAO_1_5_20B;
+
     const createCompletionPrams: ChatCompletionCreateParamsNonStreaming = {
       model,
       messages,
       stream: false,
-      seed: null,
-      stop: null,
-      frequency_penalty: null,
-      presence_penalty: null,
-      // custom options
       max_tokens,
       temperature,
       top_p,
     };
 
-    const createCompletionPramsThinkingVp: ThinkingVisionProModelConfig = {
-      ...createCompletionPrams,
-      thinking: {
-        type: 'disabled',
-      },
-    };
+    const createCompletionPramsFinal = isDoubaoModel
+      ? ({
+          ...createCompletionPrams,
+          thinking: {
+            type: 'disabled',
+          },
+        } as ThinkingVisionProModelConfig)
+      : createCompletionPrams;
 
     const startTime = Date.now();
 
@@ -208,10 +209,12 @@ export class UITarsModel extends Model {
           ...(responseId && {
             previous_response_id: responseId,
           }),
-          // @ts-expect-error
-          thinking: {
-            type: 'disabled',
-          },
+          ...(isDoubaoModel && {
+            // @ts-expect-error
+            thinking: {
+              type: 'disabled',
+            },
+          }),
         };
         logger.info(
           '[ResponseAPI] [input]: ',
@@ -258,7 +261,7 @@ export class UITarsModel extends Model {
 
     // Use Chat Completions API if not using Response API
     const result = await openai.chat.completions.create(
-      createCompletionPramsThinkingVp,
+      createCompletionPramsFinal,
       {
         ...options,
         timeout: 1000 * 30,

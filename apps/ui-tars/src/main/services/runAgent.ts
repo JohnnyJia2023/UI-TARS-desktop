@@ -21,7 +21,7 @@ import {
 } from '@ui-tars/operator-browser';
 import { showPredictionMarker } from '@main/window/ScreenMarker';
 import { SettingStore } from '@main/store/setting';
-import { AppState, Operator } from '@main/store/types';
+import { AppState, Operator, VLMProviderV2 } from '@main/store/types';
 import { GUIAgentManager } from '../ipcRoutes/agent';
 import { checkBrowserAvailability } from './browserCheck';
 import {
@@ -172,6 +172,17 @@ export const runAgent = async (
     useResponsesApi: settings.useResponsesApi,
   };
   let modelAuthHdrs: Record<string, string> = {};
+
+  // Copilot requires editor-specific headers for API access
+  if (settings.vlmProvider === VLMProviderV2.copilot) {
+    modelAuthHdrs = {
+      'Editor-Version': 'vscode/1.104.1',
+      'Copilot-Integration-Id': 'vscode-chat',
+      'Openai-Intent': 'conversation-edits',
+      'x-initiator': 'agent',
+      'Copilot-Vision-Request': 'true',
+    };
+  }
 
   if (
     settings.operator === Operator.RemoteComputer ||

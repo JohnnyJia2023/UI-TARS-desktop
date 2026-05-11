@@ -8,19 +8,43 @@ import { logger } from '../logger';
 
 const t = initIpc.create();
 
+const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
+
+const getOpenAIClientConfig = (input: {
+  baseUrl: string;
+  apiKey: string; // secretlint-disable-line @secretlint/secretlint-rule-pattern
+  modelName: string;
+}) => {
+  const isCopilot =
+    input.baseUrl.replace(/\/+$/, '') === COPILOT_BASE_URL.replace(/\/+$/, '');
+
+  return {
+    apiKey: input.apiKey, // secretlint-disable-line @secretlint/secretlint-rule-pattern
+    baseURL: input.baseUrl,
+    ...(isCopilot
+      ? {
+          defaultHeaders: {
+            'Editor-Version': 'vscode/1.104.1',
+            'Copilot-Integration-Id': 'vscode-chat',
+            'Openai-Intent': 'conversation-edits',
+            'x-initiator': 'agent',
+            'Copilot-Vision-Request': 'true',
+          },
+        }
+      : {}),
+  };
+};
+
 export const settingRoute = t.router({
   checkVLMResponseApiSupport: t.procedure
     .input<{
       baseUrl: string;
-      apiKey: string;
+      apiKey: string; // secretlint-disable-line @secretlint/secretlint-rule-pattern
       modelName: string;
     }>()
     .handle(async ({ input }) => {
       try {
-        const openai = new OpenAI({
-          apiKey: input.apiKey,
-          baseURL: input.baseUrl,
-        });
+        const openai = new OpenAI(getOpenAIClientConfig(input));
         const result = await openai.responses.create({
           model: input.modelName,
           input: 'return 1+1=?',
@@ -36,15 +60,12 @@ export const settingRoute = t.router({
   checkModelAvailability: t.procedure
     .input<{
       baseUrl: string;
-      apiKey: string;
+      apiKey: string; // secretlint-disable-line @secretlint/secretlint-rule-pattern
       modelName: string;
     }>()
     .handle(async ({ input }) => {
       try {
-        const openai = new OpenAI({
-          apiKey: input.apiKey,
-          baseURL: input.baseUrl,
-        });
+        const openai = new OpenAI(getOpenAIClientConfig(input));
         const completion = await openai.chat.completions.create({
           model: input.modelName,
           messages: [{ role: 'user', content: 'return 1+1=?' }],

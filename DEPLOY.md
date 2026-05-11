@@ -8,43 +8,92 @@ Branch `jhy/fix` — 3 commits against upstream `main`.
 - Entitlements at: `apps/ui-tars/entitlements.plist`
 - If not yet built: `cd apps/ui-tars && UI_TARS_APP_PRIVATE_KEY_BASE64="dummy" pnpm run build:dist && pnpm run package`
 
+## Important note
+
+Do **not** deploy this patch by replacing only `Contents/Resources/app.asar`.
+
+Electron validates the packaged `app.asar` against integrity metadata stored in
+the app bundle. Replacing only the archive triggers a startup failure like:
+
+```text
+FATAL:asar_util.cc(...) Integrity check failed for asar archive
+```
+
+The working deployment path is to replace the entire `UI TARS.app` bundle with
+the packaged output from this branch.
+
 ## Install
 
 ```bash
+set -e
+
+APP="/Applications/UI TARS.app"
+SRC_APP="apps/ui-tars/out/UI TARS-darwin-arm64/UI TARS.app"
+TS="$(date +%Y%m%d-%H%M%S)"
+
 # ═══ 1. Kill any running UI-TARS ═══
-killall UI-TARS 2>/dev/null; sleep 1
+killall "UI TARS" 2>/dev/null || true
+sleep 1
 
+# ═══ 2. Backup the existing installed app bundle ═══
+mv "$APP" "/Applications/UI TARS.app.bak-$TS"
 
-# ═══ 2. Backup the original asar ═══
-sudo cp \
-  "/Applications/UI TARS.app/Contents/Resources/app.asar" \
-  "/Applications/UI TARS.app/Contents/Resources/app.asar.bak-$(date +%Y%m%d-%H%M%S)"
+# ═══ 3. Copy the full patched app bundle ═══
+cp -R "$SRC_APP" "$APP"
 
+# ═══ 4. Clear quarantine on the copied bundle ═══
+xattr -dr com.apple.quarantine "$APP" || true
 
-# ═══ 3. Deploy the patched asar ═══
-sudo cp \
-  "apps/ui-tars/out/UI TARS-darwin-arm64/UI TARS.app/Contents/Resources/app.asar" \
-  "/Applications/UI TARS.app/Contents/Resources/app.asar"
+# ═══ 5. Verify the copied bundle signature ═══
+codesign --verify --deep --strict --verbose=2 "$APP"
 
-
-# ═══ 4. Re-sign with JIT entitlement ═══
-sudo codesign --force --deep --sign - \
-  --entitlements "apps/ui-tars/entitlements.plist" \
-  "/Applications/UI TARS.app"
-
-
-# ═══ 5. Launch ═══
-open "/Applications/UI TARS.app"
+# ═══ 6. Launch ═══
+open -a "$APP"
 ```
 
-## Fallback (if app crashes on Apple Silicon)
+If the target app bundle is root-owned on a different machine, add `sudo` to
+the `mv`, `cp -R`, and `xattr` commands above.
+
+## Verification
 
 ```bash
-sudo codesign --remove-signature "/Applications/UI TARS.app"
+codesign --verify --deep --strict --verbose=2 "/Applications/UI TARS.app"
 
-sudo codesign --force --deep --sign - \
-  --entitlements "apps/ui-tars/entitlements.plist" \
-  "/Applications/UI TARS.app"
+open -a "/Applications/UI TARS.app"
+
+pgrep -fl "UI TARS|UI-TARS|ui-tars"
+```
+
+In-app verification used for this branch:
+
+1. Open `Settings` -> `VLM Settings`.
+2. Confirm the provider dropdown includes `MiniMax`.
+3. Confirm the saved MiniMax config uses:
+   - base URL: `https://api.minimax.io/v1`
+   - model: `MiniMax-M2.7`
+4. Click `Check Model Availability`.
+5. Expected result: the model works, but `Use Responses API` is reported as not
+   supported for `MiniMax-M2.7`.
+
+For GitHub Copilot on this branch:
+
+1. Set provider to `GitHub Copilot`.
+2. Use base URL `https://api.githubcopilot.com`.
+3. Use model `gpt-5-mini`.
+4. Keep `Use Responses API` off.
+5. `Check Model Availability` should succeed. This branch patches the settings
+   validation path to send the same Copilot headers used by the runtime agent.
+
+## Recovery
+
+```bash
+killall "UI TARS" 2>/dev/null || true
+
+rm -rf "/Applications/UI TARS.app"
+
+mv "/Applications/UI TARS.app.bak-<timestamp>" "/Applications/UI TARS.app"
+
+open -a "/Applications/UI TARS.app"
 ```
 
 ## Changes in this branch
@@ -53,6 +102,7 @@ sudo codesign --force --deep --sign - \
 2. **`apps/ui-tars/src/main/store/types.ts`** — added minimax, copilot, mlx to VLMProviderV2 (7 providers total)
 3. **`apps/ui-tars/src/main/utils/agent.ts`** — route new providers to V1_0 system prompt
 4. **`apps/ui-tars/src/main/services/runAgent.ts`** — Copilot editor headers injected automatically
+5. **`apps/ui-tars/entitlements.plist`** — ad-hoc signing entitlement file with `com.apple.security.cs.allow-jit`
 
 ## Sync upstream
 
